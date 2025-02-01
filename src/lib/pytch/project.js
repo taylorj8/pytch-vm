@@ -1220,8 +1220,17 @@ var $builtinmodule = function (name) {
                     return [];
                 } else {
                     // Python-land code invoked a syscall.
-
+                    
+                    
                     let susp = susp_or_retval;
+                    console.log(susp.$lineno);
+                    if (susp.data.type === "Sk.debug") {
+                        console.log("Debug suspension");
+                        console.log(susp);
+                        return [];
+                    }
+
+
                     if (susp.data.type !== "Pytch") {
                         const err = new Error("cannot handle non-Pytch suspension"
                                               + ` of type "${susp.data.type}"`);
