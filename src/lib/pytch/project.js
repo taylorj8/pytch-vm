@@ -978,6 +978,10 @@ var $builtinmodule = function (name) {
             return this.state == Thread.State.RAISED_EXCEPTION;
         }
 
+        is_braked() {
+            return this.state == Thread.State.BRAKED;
+        }
+
         requested_stop() {
             return this.state == Thread.State.REQUESTED_STOP;
         }
@@ -995,6 +999,9 @@ var $builtinmodule = function (name) {
 
             case Thread.State.AWAITING_SOUND_COMPLETION:
                 return `performance of sound "${this.sleeping_on.tag}"`;
+
+            case Thread.State.BRAKED:
+                return "breakpoint";
 
             default:
                 // We should never ask for a human-readable summary of what a
@@ -1021,6 +1028,9 @@ var $builtinmodule = function (name) {
             case Thread.State.ZOMBIE:
                 return false;
 
+            case Thread.State.BRAKED:
+                return false; // todo check this
+
             default:
                 // This on purpose includes "RUNNING" and "RAISED_EXCEPTION"; we
                 // should never ask if an already-RUNNING thread is ready to
@@ -1036,6 +1046,7 @@ var $builtinmodule = function (name) {
             case Thread.State.AWAITING_PASSAGE_OF_TIME:
             case Thread.State.AWAITING_SOUND_COMPLETION:
             case Thread.State.ZOMBIE:
+            case Thread.State.BRAKED:
                 // No wake-up action required.
                 break;
 
@@ -1219,18 +1230,19 @@ var $builtinmodule = function (name) {
                     this.skulpt_susp = null;
                     return [];
                 } else {
-                    // Python-land code invoked a syscall.
-                    
-                    
+                    // Python-land code returned a suspension
                     let susp = susp_or_retval;
                     console.log(susp.$lineno);
                     if (susp.data.type === "Sk.debug") {
                         console.log("Debug suspension");
                         console.log(susp);
+                        this.state = Thread.State.BRAKED; // todo
+                        this.skulpt_susp = susp;
                         return [];
                     }
-
-
+                    
+                    
+                    // Python-land code invoked a syscall.
                     if (susp.data.type !== "Pytch") {
                         const err = new Error("cannot handle non-Pytch suspension"
                                               + ` of type "${susp.data.type}"`);
@@ -1339,6 +1351,9 @@ var $builtinmodule = function (name) {
 
         // REQUESTED_STOP: The thread requested all threads be stopped.
         REQUESTED_STOP: "requested-stop",
+
+        // BRAKED: The thread has hit a breakpoint.
+        BRAKED: "braked",
     };
 
 
@@ -1360,6 +1375,10 @@ var $builtinmodule = function (name) {
 
         raised_exception() {
             return this.threads.some(t => t.raised_exception());
+        }
+
+        is_braked() {
+            return this.threads.some(t => t.is_braked());
         }
 
         requested_stop() {
@@ -1905,6 +1924,8 @@ var $builtinmodule = function (name) {
             if (exception_was_raised)
                 this.kill_all_threads_and_extras();
 
+            const braked = this.thread_groups.some(tg => tg.is_braked()); 
+
             // Tests in Scratch show that as well as stopping all scripts,
             // the "Stop All" block:
             //
@@ -1924,6 +1945,7 @@ var $builtinmodule = function (name) {
 
             const project_state = {
                 exception_was_raised,
+                braked,
                 maybe_live_question: this.maybe_live_question(),
             };
 
