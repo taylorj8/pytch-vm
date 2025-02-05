@@ -1232,7 +1232,6 @@ var $builtinmodule = function (name) {
                 } else {
                     // Python-land code returned a suspension
                     let susp = susp_or_retval;
-                    console.log(susp.$lineno);
                     if (susp.data.type === "Sk.debug") {
                         console.log("Debug suspension");
                         console.log(susp);
@@ -1244,6 +1243,8 @@ var $builtinmodule = function (name) {
                     
                     // Python-land code invoked a syscall.
                     if (susp.data.type !== "Pytch") {
+                        console.log("Non-Pytch suspension");
+                        console.log(susp);
                         const err = new Error("cannot handle non-Pytch suspension"
                                               + ` of type "${susp.data.type}"`);
                         Sk.pytch.on_exception(err, this.one_frame_error_context());
@@ -1422,6 +1423,14 @@ var $builtinmodule = function (name) {
 
         continue_on_breakpoint() {
             this.threads.forEach(t => t.continue_on_breakpoint());
+        }
+
+        get_debug_suspension() {
+            let braked_thread = this.threads.find(t => t.is_braked());
+            if (braked_thread == null)
+                return null;
+
+            return braked_thread.skulpt_susp;
         }
     }
 
@@ -2167,6 +2176,14 @@ var $builtinmodule = function (name) {
 
         is_braked() {
             return this.thread_groups.some(tg => tg.is_braked());
+        }
+
+        get_debug_suspension() {
+            let braked_thread_group = this.thread_groups.find(tg => tg.is_braked());
+            if (braked_thread_group == null)
+                return null;
+
+            return braked_thread_group.get_debug_suspension();
         }
 
         continue_on_breakpoint() {
