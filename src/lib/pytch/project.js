@@ -978,12 +978,12 @@ var $builtinmodule = function (name) {
             return this.state == Thread.State.RAISED_EXCEPTION;
         }
 
-        is_braked() {
-            return this.state == Thread.State.BRAKED;
-        }
-
         requested_stop() {
             return this.state == Thread.State.REQUESTED_STOP;
+        }
+
+        is_braked() {
+            return this.state == Thread.State.BRAKED;
         }
 
         get human_readable_sleeping_on() {
@@ -1207,7 +1207,7 @@ var $builtinmodule = function (name) {
         }
 
         one_frame() {
-            if (! this.is_running())
+            if (!this.is_running())
                 return [];
 
             try {
@@ -1310,6 +1310,14 @@ var $builtinmodule = function (name) {
                 wait: this.human_readable_sleeping_on,
             };
         }
+
+        continue_on_breakpoint() {
+            if (this.state == Thread.State.BRAKED) {
+                console.log(`Thread for ${this.actor_instance.info_label} continuing after breakpoint`);
+                // this.skulpt_susp.resume();
+                this.state = Thread.State.RUNNING;
+            }
+        }
     }
 
     Thread.State = {
@@ -1410,6 +1418,10 @@ var $builtinmodule = function (name) {
 
         threads_info() {
             return this.threads.map(t => t.info());
+        }
+
+        continue_on_breakpoint() {
+            this.threads.forEach(t => t.continue_on_breakpoint());
         }
     }
 
@@ -1945,7 +1957,6 @@ var $builtinmodule = function (name) {
 
             const project_state = {
                 exception_was_raised,
-                braked,
                 maybe_live_question: this.maybe_live_question(),
             };
 
@@ -2152,6 +2163,14 @@ var $builtinmodule = function (name) {
 
         cull_unregistered_instances() {
             this.actors.forEach(a => a.cull_unregistered_instances());
+        }
+
+        is_braked() {
+            return this.thread_groups.some(tg => tg.is_braked());
+        }
+
+        continue_on_breakpoint() {
+            this.thread_groups.forEach(tg => tg.continue_on_breakpoint());
         }
     }
 
