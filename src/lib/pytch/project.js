@@ -958,6 +958,8 @@ var $builtinmodule = function (name) {
             };
             this.parent_project = parent_project;
             this.state = Thread.State.RUNNING;
+            this.susp_listening = true
+            this.prev_dbg_susp_line = -1;
             this.sleeping_on = null;
 
             this.actor_instance = py_arg.$pytchActorInstance;
@@ -1232,10 +1234,21 @@ var $builtinmodule = function (name) {
                 } else {
                     // Python-land code returned a suspension
                     let susp = susp_or_retval;
-                    if (susp.data.type === "Sk.debug" || susp.data.type === "Sk.delay") {
-                        console.log("Debug suspension");
-                        console.log(susp);
-                        this.state = Thread.State.BRAKED;
+                    if (this.susp_listening && (susp.data.type === "Sk.debug" || susp.data.type === "Sk.delay")) {
+                        let line = susp.$lineno;
+                        if (line === this.prev_dbg_susp_line) {
+                            this.state = Thread.State.RUNNING;
+                        }
+                        else {
+                            console.log("Debug suspension: " + line);
+                            console.log(susp);
+                            this.state = Thread.State.BRAKED;
+                            this.prev_dbg_susp_line = line;
+                        }
+                        this.skulpt_susp = susp;
+                        return [];
+                    }
+                    else if (susp.data.type === "Sk.debug" || susp.data.type === "Sk.delay") {
                         this.skulpt_susp = susp;
                         return [];
                     }
@@ -1315,6 +1328,10 @@ var $builtinmodule = function (name) {
                 // this.skulpt_susp.resume();
                 this.state = Thread.State.RUNNING;
             }
+        }
+
+        set_listening(listening) {
+            this.susp_listening = listening;
         }
     }
 
@@ -1420,6 +1437,14 @@ var $builtinmodule = function (name) {
 
         continue_on_breakpoint() {
             this.threads.forEach(t => t.continue_on_breakpoint());
+        }
+
+        stop_others_listening() {
+            this.threads.forEach(t => {
+                if (!t.is_braked()) {
+                    t.set_listening(false);
+                }
+            });
         }
 
         get_debug_suspension() {
@@ -2173,6 +2198,10 @@ var $builtinmodule = function (name) {
 
         is_braked() {
             return this.thread_groups.some(tg => tg.is_braked());
+        }
+
+        stop_others_listening() {
+            this.thread_groups.forEach(tg => tg.stop_others_listening());
         }
 
         get_debug_suspension() {
