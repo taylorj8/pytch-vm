@@ -1232,19 +1232,16 @@ var $builtinmodule = function (name) {
                 } else {
                     // Python-land code returned a suspension
                     let susp = susp_or_retval;
-                    if (susp.data.type === "Sk.debug") {
+                    if (susp.data.type === "Sk.debug" || susp.data.type === "Sk.delay") {
                         console.log("Debug suspension");
                         console.log(susp);
-                        this.state = Thread.State.BRAKED; // todo
+                        this.state = Thread.State.BRAKED;
                         this.skulpt_susp = susp;
                         return [];
                     }
                     
-                    
                     // Python-land code invoked a syscall.
                     if (susp.data.type !== "Pytch") {
-                        console.log("Non-Pytch suspension");
-                        console.log(susp);
                         const err = new Error("cannot handle non-Pytch suspension"
                                               + ` of type "${susp.data.type}"`);
                         Sk.pytch.on_exception(err, this.one_frame_error_context());
