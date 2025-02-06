@@ -2182,8 +2182,14 @@ var $builtinmodule = function (name) {
             let braked_thread_group = this.thread_groups.find(tg => tg.is_braked());
             if (braked_thread_group == null)
                 return null;
-
             return braked_thread_group.get_debug_suspension();
+        }
+
+        get_debug_line() {
+            let debug_suspension = this.get_debug_suspension();
+            if (debug_suspension == null)
+                return null;
+            return debug_suspension.$lineno;
         }
 
         continue_on_breakpoint() {
