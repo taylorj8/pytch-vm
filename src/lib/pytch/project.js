@@ -959,7 +959,6 @@ var $builtinmodule = function (name) {
             this.parent_project = parent_project;
             this.state = Thread.State.RUNNING;
             this.debug_listening = true
-            this.prev_dbg_susp_line = -1;
             this.sleeping_on = null;
 
             this.actor_instance = py_arg.$pytchActorInstance;
@@ -1237,14 +1236,13 @@ var $builtinmodule = function (name) {
                     if (susp.data.type === "Sk.debug" || susp.data.type === "Sk.delay") {
                         if (this.debug_listening) {
                             let line = susp.$lineno;
-                            if (susp.child && susp.child.$isSuspension) {
-                                this.state = Thread.State.RUNNING;
-                            }
-                            else {
+                            if (!(susp.child && susp.child.$isSuspension)) {
                                 console.log("Debug suspension: " + line);
                                 console.log(susp);
                                 this.state = Thread.State.BRAKED;
-                                this.prev_dbg_susp_line = line;
+                            }
+                            else {
+                                this.state = Thread.State.RUNNING;
                             }
                         }
                         this.skulpt_susp = susp;
@@ -1437,7 +1435,7 @@ var $builtinmodule = function (name) {
             this.threads.forEach(t => t.continue_on_breakpoint());
         }
 
-        stop_others_listening() {
+        stop_other_threads_listening() {
             this.threads.forEach(t => {
                 if (!t.is_braked()) {
                     t.set_listening(false);
@@ -1445,7 +1443,7 @@ var $builtinmodule = function (name) {
             });
         }
 
-        allow_all_listening() {
+        allow_all_threads_listening() {
             this.threads.forEach(t => t.set_listening(true));
         }
 
@@ -2200,12 +2198,12 @@ var $builtinmodule = function (name) {
             return this.thread_groups.some(tg => tg.has_braked_thread());
         }
 
-        stop_others_listening() {
-            this.thread_groups.forEach(tg => tg.stop_others_listening());
+        stop_other_threads_listening() {
+            this.thread_groups.forEach(tg => tg.stop_other_threads_listening());
         }
 
-        allow_all_listening() {
-            this.thread_groups.forEach(tg => tg.allow_all_listening());
+        allow_all_threads_listening() {
+            this.thread_groups.forEach(tg => tg.allow_all_threads_listening());
         }
 
         get_debug_suspension() {
@@ -2220,6 +2218,13 @@ var $builtinmodule = function (name) {
             if (debug_suspension == null)
                 return null;
             return debug_suspension.$lineno;
+        }
+
+        has_top_level_debug_suspension() {
+            let debug_suspension = this.get_debug_suspension();
+            if (debug_suspension == null)
+                return false;
+            return !(debug_suspension.child && debug_suspension.child.$isSuspension);
         }
 
         continue_on_breakpoint() {
