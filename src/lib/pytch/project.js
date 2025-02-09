@@ -1235,15 +1235,8 @@ var $builtinmodule = function (name) {
                     let susp = susp_or_retval;
                     if (susp.data.type === "Sk.debug" || susp.data.type === "Sk.delay") {
                         if (this.debug_listening) {
-                            let line = susp.$lineno;
-                            if (!(susp.child && susp.child.$isSuspension)) {
-                                console.log("Debug suspension: " + line);
-                                console.log(susp);
-                                this.state = Thread.State.BRAKED;
-                            }
-                            else {
-                                this.state = Thread.State.RUNNING;
-                            }
+                            this.state = susp.child && susp.child.$isSuspension?
+                                Thread.State.RUNNING : Thread.State.BRAKED;
                         }
                         this.skulpt_susp = susp;
                         return [];
@@ -2229,6 +2222,98 @@ var $builtinmodule = function (name) {
 
         continue_on_breakpoint() {
             this.thread_groups.forEach(tg => tg.continue_on_breakpoint());
+        }
+
+        get_all_local_variables = function() {
+            const varCollection = {};
+            this.actors.forEach(actor => {
+                actor.instances.forEach(instance => {
+                    const vars = new ActorVariables();
+                    vars.set_img_src(instance);
+                    vars.set_position(instance.render_x, instance.render_y);
+                    vars.set_static_variables(instance);
+                    varCollection[instance.info_label] = vars;
+                });
+            });
+    
+            this.thread_groups.forEach(threadGroup => {
+                threadGroup.threads.forEach(thread => {
+                const suspension = thread.skulpt_susp;
+                if (suspension && suspension.$tmps) {
+                    const actor = suspension.$tmps.self.$pytchActorInstance.info_label;
+                    const vars = varCollection[actor];
+                    vars.set_local_variables(suspension.$tmps);
+                }
+                });
+            });
+            return varCollection;
+        };
+
+        get_global_variables() {
+            const globalVariables = {};
+            Object.entries(this.$containingModule.$d)
+                .filter(([key, value]) => !key.startsWith("_") && !key.startsWith("$") && typeof value !== "function" && !String(value).startsWith("<module"))
+                .forEach(([key, value]) => {
+                    globalVariables[key] = value;
+                });
+            return globalVariables;
+        }
+    }
+
+    class ActorVariables {
+        constructor() {
+            this.is_stage = false;
+            this.img_src = "";
+            this.position = {
+                x: null,
+                y: null,
+                toString() {
+                    if (this.x === null || this.y === null) {
+                        return "";
+                    }
+                    return `Position: (${parseFloat(this.x.toFixed(3))}, ${parseFloat(this.y.toFixed(3))})`;
+                }
+            };
+            this.local = {};
+            this.static = {};
+        }
+
+        set_img_src(instance) {
+            this.img_src = instance.actor._appearances[instance.render_appearance_index].image.currentSrc;
+        }
+
+        set_position(x, y) {
+            this.position.x = x;
+            this.position.y = y;
+        }
+
+        set_local_variables(variables) {
+            this.local = this.filterVariables(variables);
+        }
+
+        set_static_variables(actor) {
+            let static_vars = Object.getPrototypeOf(actor.py_object)
+            this.static = this.filterVariables(static_vars);
+        }
+
+        show_variables(variableType) {
+            const variables = this[variableType];
+            return Object.entries(variables)
+            .map(([key, value]) => {
+                if (/^-?\d+\.\d+$/.test(value)) {
+                    value = parseFloat(value.toFixed(3));
+                }
+                return `${key}: ${value}`;
+            })
+        }
+
+        filterVariables(variables) {
+            return Object.entries(variables)
+                .filter(([key, value]) => !key.startsWith("_") && !key.startsWith("$") && key !== "self" && !String(value).startsWith("<function"))
+                .reduce((acc, [key, value]) => {
+                    acc[key] = value;
+                    return acc;
+                }, {});
         }
     }
 
