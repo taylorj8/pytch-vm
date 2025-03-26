@@ -1238,6 +1238,7 @@ var $builtinmodule = function (name) {
                             this.state = susp.child && susp.child.$isSuspension?
                                 Thread.State.RUNNING : Thread.State.BRAKED;
                         }
+                        console.log(susp)
                         this.skulpt_susp = susp;
                         return [];
                     }
@@ -2224,13 +2225,15 @@ var $builtinmodule = function (name) {
             this.thread_groups.forEach(tg => tg.continue_on_breakpoint());
         }
 
-        get_all_local_variables = function() {
+        get_all_local_variables = function() { // todo stop button should disable step mode (effectively hitting the continue button)
             const varCollection = {};
             this.actors.forEach(actor => {
+                console.log(actor)
                 actor.instances.forEach(instance => {
                     const vars = new ActorVariables();
                     vars.set_img_src(instance);
                     vars.set_position(instance.render_x, instance.render_y);
+                    vars.set_appearance_index(instance)
                     vars.set_static_variables(instance);
                     varCollection[instance.info_label] = vars;
                 });
@@ -2274,6 +2277,7 @@ var $builtinmodule = function (name) {
                     return `Position: (${parseFloat(this.x.toFixed(3))}, ${parseFloat(this.y.toFixed(3))})`;
                 }
             };
+            this.appearance_index = 0;
             this.local = {};
             this.static = {};
         }
@@ -2285,6 +2289,10 @@ var $builtinmodule = function (name) {
         set_position(x, y) {
             this.position.x = x;
             this.position.y = y;
+        }
+
+        set_appearance_index(instance) {
+            this.appearance_index = instance.render_appearance_index
         }
 
         set_local_variables(variables) {

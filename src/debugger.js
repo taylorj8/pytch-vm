@@ -85,7 +85,7 @@ Sk.Debugger.prototype.check_breakpoints = function(filename, lineno, colno, glob
     // If Step mode is enabled then ignore breakpoints since we will just break
     // at every line.
     if (this.step_mode === true) {
-        // step only when in the stdin file
+        // break only when in the stdin file
         return filename === "<stdin>.py"
     }
     
