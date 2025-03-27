@@ -2228,7 +2228,7 @@ var $builtinmodule = function (name) {
         get_all_local_variables = function() { // todo stop button should disable step mode (effectively hitting the continue button)
             const varCollection = {};
             this.actors.forEach(actor => {
-                console.log(actor)
+                // console.log(actor)
                 actor.instances.forEach(instance => {
                     const vars = new ActorVariables();
                     vars.set_img_src(instance);
