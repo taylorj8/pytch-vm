@@ -2229,7 +2229,7 @@ var $builtinmodule = function (name) {
             const actor_collection = {}
             // console.log(this.actors)
             this.actors.forEach(actor => {
-                const class_variables = new ClassVariables(actor.instances[0])
+                const class_variables = new ClassVariables(actor)
                 actor.instances.forEach(instance => {
                     const vars = new ActorVariables(instance);
                     class_variables.actors[instance.info_label] = vars;
@@ -2266,22 +2266,13 @@ var $builtinmodule = function (name) {
     class ClassVariables {
         constructor(actor) {
             this.is_stage = actor instanceof PytchStage
-            let static_vars = Object.getPrototypeOf(actor.py_object)
-            this.static = this.filterVariables(static_vars);
+            let static_vars = Object.getPrototypeOf(actor.instances[0].py_object)
+            this.static = filterVariables(static_vars);
             this.actors = {};
         }
 
         has_clones() {
-            return this.actors.length > 1;
-        }
-
-        filterVariables(variables) {
-            return Object.entries(variables)
-                .filter(([key, value]) => !key.startsWith("_") && !key.startsWith("$") && key !== "self" && !String(value).startsWith("<function"))
-                .reduce((acc, [key, value]) => {
-                    acc[key] = value;
-                    return acc;
-                }, {});
+            return Object.keys(this.actors).length > 1;
         }
     }
 
@@ -2297,11 +2288,13 @@ var $builtinmodule = function (name) {
                     return `Position: (${parseFloat(this.x.toFixed(2))}, ${parseFloat(this.y.toFixed(2))})`;
                 }
             };
+            this.costume_number = instance.render_appearance_index
+            this.img_src = instance.actor._appearances[this.costume_number].image.currentSrc;
             this.local = {};
         }
 
         set_local_variables(variables) {
-            this.local = this.filterVariables(variables);
+            this.local = filterVariables(variables);
         }
 
         show_variables(variableType) {
@@ -2314,17 +2307,16 @@ var $builtinmodule = function (name) {
                 return `${key}: ${value}`;
             })
         }
-
-        filterVariables(variables) {
-            return Object.entries(variables)
-                .filter(([key, value]) => !key.startsWith("_") && !key.startsWith("$") && key !== "self" && !String(value).startsWith("<function"))
-                .reduce((acc, [key, value]) => {
-                    acc[key] = value;
-                    return acc;
-                }, {});
-        }
     }
 
+    function filterVariables(variables) {
+        return Object.entries(variables)
+            .filter(([key, value]) => !key.startsWith("_") && !key.startsWith("$") && key !== "self" && !String(value).startsWith("<function"))
+            .reduce((acc, [key, value]) => {
+                acc[key] = value;
+                return acc;
+            }, {});
+    }
 
     ////////////////////////////////////////////////////////////////////////////////
     //
