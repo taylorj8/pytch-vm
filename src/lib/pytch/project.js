@@ -2297,15 +2297,21 @@ var $builtinmodule = function (name) {
             this.local = filterVariables(variables);
         }
 
-        show_variables(variableType) {
-            const variables = this[variableType];
+        has_variables(variable_type) {
+            return Object.keys(this[variable_type]).length > 1 && 
+                Object.values(this[variable_type]).some(value => value !== undefined);
+        }
+
+        show_variables(variable_type) {
+            const variables = this[variable_type];
             return Object.entries(variables)
+            .filter(([_, value]) => value !== undefined)
             .map(([key, value]) => {
                 if (/^-?\d+\.\d+$/.test(value)) {
                     value = parseFloat(value.toFixed(2));
                 }
                 return `${key}: ${value}`;
-            })
+            });
         }
     }
 
