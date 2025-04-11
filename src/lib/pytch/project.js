@@ -1238,7 +1238,7 @@ var $builtinmodule = function (name) {
                             this.state = susp.child && susp.child.$isSuspension?
                                 Thread.State.RUNNING : Thread.State.BRAKED;
                         }
-                        console.log(susp)
+                        // console.log(susp)
                         this.skulpt_susp = susp;
                         return [];
                     }
@@ -2247,7 +2247,7 @@ var $builtinmodule = function (name) {
                 }
                 });
             });
-            console.log(actor_collection)
+            // console.log(actor_collection)
             return actor_collection;
         };
 
