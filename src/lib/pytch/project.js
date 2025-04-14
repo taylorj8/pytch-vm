@@ -1235,10 +1235,11 @@ var $builtinmodule = function (name) {
                     let susp = susp_or_retval;
                     if (susp.data.type === "Sk.debug" || susp.data.type === "Sk.delay") {
                         if (this.debug_listening) {
-                            this.state = susp.child && susp.child.$isSuspension?
-                                Thread.State.RUNNING : Thread.State.BRAKED;
+                            // this prevents extra suspensions triggering on certain lines
+                            this.state = (susp.data.type === "Sk.debug" && (!susp.child || !susp.child.$isSuspension)) 
+                                ? Thread.State.BRAKED 
+                                : Thread.State.RUNNING;
                         }
-                        // console.log(susp)
                         this.skulpt_susp = susp;
                         return [];
                     }
@@ -2227,7 +2228,6 @@ var $builtinmodule = function (name) {
 
         get_all_local_variables = function() {
             const actor_collection = {}
-            // console.log(this.actors)
             this.actors.forEach(actor => {
                 const class_variables = new ClassVariables(actor)
                 actor.instances.forEach(instance => {
@@ -2247,12 +2247,10 @@ var $builtinmodule = function (name) {
                 }
                 });
             });
-            // console.log(actor_collection)
             return actor_collection;
         };
 
         get_global_variables() {
-            // console.log(this)
             const globalVariables = {};
             Object.entries(this.$containingModule.$d)
                 .filter(([key, value]) => !key.startsWith("_") && !key.startsWith("$") && typeof value !== "function" && !String(value).startsWith("<module"))
