@@ -956,7 +956,7 @@ var $builtinmodule = function (name) {
             this.skulpt_susp = {
                 resume: () => Sk.misceval.callsimOrSuspend(py_callable, py_arg)
             };
-            this.parent_project = parent_project;
+            this.parent_project = parent_project; // todo use this to check if thread is braked
             this.state = Thread.State.RUNNING;
             this.debug_listening = true
             this.sleeping_on = null;
@@ -2189,11 +2189,11 @@ var $builtinmodule = function (name) {
             this.actors.forEach(a => a.cull_unregistered_instances());
         }
 
-        has_braked_thread() {
+        has_braked_thread() { // todo make this state in project
             return this.thread_groups.some(tg => tg.has_braked_thread());
         }
 
-        stop_other_threads_listening() {
+        stop_other_threads_listening() { 
             this.thread_groups.forEach(tg => tg.stop_other_threads_listening());
         }
 
