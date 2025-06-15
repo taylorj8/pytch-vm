@@ -956,9 +956,9 @@ var $builtinmodule = function (name) {
             this.skulpt_susp = {
                 resume: () => Sk.misceval.callsimOrSuspend(py_callable, py_arg)
             };
-            this.parent_project = parent_project; // todo use this to check if thread is braked
+            this.parent_project = parent_project;
             this.state = Thread.State.RUNNING;
-            this.debug_listening = true
+
             this.sleeping_on = null;
 
             this.actor_instance = py_arg.$pytchActorInstance;
@@ -983,10 +983,6 @@ var $builtinmodule = function (name) {
             return this.state == Thread.State.REQUESTED_STOP;
         }
 
-        is_braked() {
-            return this.state == Thread.State.BRAKED;
-        }
-
         get human_readable_sleeping_on() {
             switch (this.state) {
             case Thread.State.RUNNING:
@@ -1000,9 +996,6 @@ var $builtinmodule = function (name) {
 
             case Thread.State.AWAITING_SOUND_COMPLETION:
                 return `performance of sound "${this.sleeping_on.tag}"`;
-
-            case Thread.State.BRAKED:
-                return "breakpoint";
 
             default:
                 // We should never ask for a human-readable summary of what a
@@ -1029,9 +1022,6 @@ var $builtinmodule = function (name) {
             case Thread.State.ZOMBIE:
                 return false;
 
-            case Thread.State.BRAKED:
-                return false; // todo check this
-
             default:
                 // This on purpose includes "RUNNING" and "RAISED_EXCEPTION"; we
                 // should never ask if an already-RUNNING thread is ready to
@@ -1047,7 +1037,6 @@ var $builtinmodule = function (name) {
             case Thread.State.AWAITING_PASSAGE_OF_TIME:
             case Thread.State.AWAITING_SOUND_COMPLETION:
             case Thread.State.ZOMBIE:
-            case Thread.State.BRAKED:
                 // No wake-up action required.
                 break;
 
@@ -1233,12 +1222,15 @@ var $builtinmodule = function (name) {
                 } else {
                     // Python-land code returned a suspension
                     let susp = susp_or_retval;
-                    if (susp.data.type === "Sk.debug" || susp.data.type === "Sk.delay") {
-                        if (this.debug_listening) {
+                    if (susp.data.type === "Sk.debug" || susp.data.type === "Sk.delay") { // todo clean this code up
+                        if (this.listening_for_debug_suspensions()) {
                             // this prevents extra suspensions triggering on certain lines
-                            this.state = (susp.data.type === "Sk.debug" && (!susp.child || !susp.child.$isSuspension)) 
-                                ? Thread.State.BRAKED 
-                                : Thread.State.RUNNING;
+                            this.parent_project.set_threads_paused(susp.data.type === "Sk.debug" && (!susp.child || !susp.child.$isSuspension));
+                            // console.log(susp.data.type === "Sk.debug" && (!susp.child || !susp.child.$isSuspension))
+                            // let stepping_thread = (susp.data.type === "Sk.debug" && (!susp.child || !susp.child.$isSuspension)) 
+                            //     ? this : null;
+                            this.parent_project.set_stepping_thread(this);
+                            // console.log("this instanceof Thread =", this instanceof Thread);
                         }
                         this.skulpt_susp = susp;
                         return [];
@@ -1313,16 +1305,12 @@ var $builtinmodule = function (name) {
             };
         }
 
-        continue_on_breakpoint() {
-            if (this.state == Thread.State.BRAKED) {
-                console.log(`Thread for ${this.actor_instance.info_label} continuing after breakpoint`);
-                // this.skulpt_susp.resume();
-                this.state = Thread.State.RUNNING;
-            }
+        is_stepping() {
+            return this === this.parent_project.stepping_thread;
         }
 
-        set_listening(listening) {
-            this.debug_listening = listening;
+        listening_for_debug_suspensions() {
+            return !this.parent_project.has_stepping_thread() || this.is_stepping();
         }
     }
 
@@ -1365,9 +1353,6 @@ var $builtinmodule = function (name) {
 
         // REQUESTED_STOP: The thread requested all threads be stopped.
         REQUESTED_STOP: "requested-stop",
-
-        // BRAKED: The thread has hit a breakpoint.
-        BRAKED: "braked",
     };
 
 
@@ -1389,10 +1374,6 @@ var $builtinmodule = function (name) {
 
         raised_exception() {
             return this.threads.some(t => t.raised_exception());
-        }
-
-        has_braked_thread() {
-            return this.threads.some(t => t.is_braked());
         }
 
         requested_stop() {
@@ -1424,30 +1405,6 @@ var $builtinmodule = function (name) {
 
         threads_info() {
             return this.threads.map(t => t.info());
-        }
-
-        continue_on_breakpoint() {
-            this.threads.forEach(t => t.continue_on_breakpoint());
-        }
-
-        stop_other_threads_listening() {
-            this.threads.forEach(t => {
-                if (!t.is_braked()) {
-                    t.set_listening(false);
-                }
-            });
-        }
-
-        allow_all_threads_listening() {
-            this.threads.forEach(t => t.set_listening(true));
-        }
-
-        get_debug_suspension() {
-            let braked_thread = this.threads.find(t => t.is_braked());
-            if (braked_thread == null)
-                return null;
-
-            return braked_thread.skulpt_susp;
         }
     }
 
@@ -1778,6 +1735,9 @@ var $builtinmodule = function (name) {
                 new DrawLayerGroup(),  // Sprites
                 new DrawLayerGroup(),  // Text (one day)
             ];
+
+            this.stepping_thread = null;
+            this.threads_paused = false;
         }
 
         actor_by_class_name(cls_name) {
@@ -2189,41 +2149,43 @@ var $builtinmodule = function (name) {
             this.actors.forEach(a => a.cull_unregistered_instances());
         }
 
-        has_braked_thread() { // todo make this state in project
-            return this.thread_groups.some(tg => tg.has_braked_thread());
+        get_stepping_thread() {
+            return this.stepping_thread;
         }
 
-        stop_other_threads_listening() { 
-            this.thread_groups.forEach(tg => tg.stop_other_threads_listening());
+        set_stepping_thread(thread) {
+            this.stepping_thread = thread;
         }
 
-        allow_all_threads_listening() {
-            this.thread_groups.forEach(tg => tg.allow_all_threads_listening());
+        has_stepping_thread() {
+            return this.stepping_thread !== null;
         }
 
-        get_debug_suspension() {
-            let braked_thread_group = this.thread_groups.find(tg => tg.has_braked_thread());
-            if (braked_thread_group == null)
-                return null;
-            return braked_thread_group.get_debug_suspension();
+        threads_are_paused() {
+            return this.threads_paused;
+        }
+
+        set_threads_paused(threads_paused) {
+            this.threads_paused = threads_paused;
         }
 
         get_debug_line() {
-            let debug_suspension = this.get_debug_suspension();
-            if (debug_suspension == null)
-                return null;
-            return debug_suspension.$lineno;
+            return this.stepping_thread.skulpt_susp.$lineno;
         }
 
         has_top_level_debug_suspension() {
-            let debug_suspension = this.get_debug_suspension();
-            if (debug_suspension == null)
+            let debug_suspension = this.stepping_thread.skulpt_susp;
+            if (debug_suspension === null)
                 return false;
             return !(debug_suspension.child && debug_suspension.child.$isSuspension);
         }
 
         continue_on_breakpoint() {
-            this.thread_groups.forEach(tg => tg.continue_on_breakpoint());
+            if (this.has_stepping_thread()) {
+                console.log(`Thread for ${this.stepping_thread.actor_instance.info_label} continuing after breakpoint`);
+                this.set_stepping_thread(null);
+                this.set_threads_paused(false);
+            }
         }
 
         get_all_local_variables = function() {
