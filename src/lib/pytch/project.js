@@ -1222,15 +1222,17 @@ var $builtinmodule = function (name) {
                 } else {
                     // Python-land code returned a suspension
                     let susp = susp_or_retval;
-                    if (susp.data.type === "Sk.debug" || susp.data.type === "Sk.delay") { // todo clean this code up
+
+                    // skip delay suspensions
+                    if (susp.data.type === "Sk.delay") {
+                        this.skulpt_susp = susp;
+                        return [];
+                    }
+                    
+                    if (susp.data.type === "Sk.debug") {
                         if (this.listening_for_debug_suspensions()) {
-                            // this prevents extra suspensions triggering on certain lines
-                            this.parent_project.set_threads_paused(susp.data.type === "Sk.debug" && (!susp.child || !susp.child.$isSuspension));
-                            // console.log(susp.data.type === "Sk.debug" && (!susp.child || !susp.child.$isSuspension))
-                            // let stepping_thread = (susp.data.type === "Sk.debug" && (!susp.child || !susp.child.$isSuspension)) 
-                            //     ? this : null;
                             this.parent_project.set_stepping_thread(this);
-                            // console.log("this instanceof Thread =", this instanceof Thread);
+                            this.parent_project.pause_threads(true);
                         }
                         this.skulpt_susp = susp;
                         return [];
@@ -1305,12 +1307,8 @@ var $builtinmodule = function (name) {
             };
         }
 
-        is_stepping() {
-            return this === this.parent_project.stepping_thread;
-        }
-
         listening_for_debug_suspensions() {
-            return !this.parent_project.has_stepping_thread() || this.is_stepping();
+            return !this.parent_project.has_stepping_thread() || this === this.parent_project.stepping_thread;
         }
     }
 
@@ -2165,12 +2163,20 @@ var $builtinmodule = function (name) {
             return this.threads_paused;
         }
 
-        set_threads_paused(threads_paused) {
+        pause_threads(threads_paused) {
             this.threads_paused = threads_paused;
         }
 
         get_debug_line() {
-            return this.stepping_thread.skulpt_susp.$lineno;
+            return get_line_from_susp(this.stepping_thread.skulpt_susp);
+
+            function get_line_from_susp(susp) {
+                if (susp.child && susp.child.$isSuspension) {
+                    return get_line_from_susp(susp.child);
+                }
+
+                return susp.$lineno;
+            }
         }
 
         has_top_level_debug_suspension() {
@@ -2184,7 +2190,7 @@ var $builtinmodule = function (name) {
             if (this.has_stepping_thread()) {
                 console.log(`Thread for ${this.stepping_thread.actor_instance.info_label} continuing after breakpoint`);
                 this.set_stepping_thread(null);
-                this.set_threads_paused(false);
+                this.pause_threads(false);
             }
         }
 
