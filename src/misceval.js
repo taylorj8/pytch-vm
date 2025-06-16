@@ -43,6 +43,7 @@ Sk.misceval.Suspension = function Suspension(resume, child, data) {
     } else {
         this.data = data;
     }
+    // this.is_top_level = !(susp.child && susp.child.$isSuspension)
 };
 Sk.exportSymbol("Sk.misceval.Suspension", Sk.misceval.Suspension);
 

@@ -958,6 +958,7 @@ var $builtinmodule = function (name) {
             };
             this.parent_project = parent_project;
             this.state = Thread.State.RUNNING;
+
             this.sleeping_on = null;
 
             this.actor_instance = py_arg.$pytchActorInstance;
@@ -1196,7 +1197,7 @@ var $builtinmodule = function (name) {
         }
 
         one_frame() {
-            if (! this.is_running())
+            if (!this.is_running())
                 return [];
 
             try {
@@ -1219,9 +1220,25 @@ var $builtinmodule = function (name) {
                     this.skulpt_susp = null;
                     return [];
                 } else {
-                    // Python-land code invoked a syscall.
-
+                    // Python-land code returned a suspension
                     let susp = susp_or_retval;
+
+                    // skip delay suspensions
+                    if (susp.data.type === "Sk.delay") {
+                        this.skulpt_susp = susp;
+                        return [];
+                    }
+                    
+                    if (susp.data.type === "Sk.debug") {
+                        if (this.listening_for_debug_suspensions()) {
+                            this.parent_project.set_stepping_thread(this);
+                            this.parent_project.pause_threads(true);
+                        }
+                        this.skulpt_susp = susp;
+                        return [];
+                    }
+                    
+                    // Python-land code invoked a syscall.
                     if (susp.data.type !== "Pytch") {
                         const err = new Error("cannot handle non-Pytch suspension"
                                               + ` of type "${susp.data.type}"`);
@@ -1288,6 +1305,10 @@ var $builtinmodule = function (name) {
                 state: this.state,
                 wait: this.human_readable_sleeping_on,
             };
+        }
+
+        listening_for_debug_suspensions() {
+            return !this.parent_project.has_stepping_thread() || this === this.parent_project.stepping_thread;
         }
     }
 
@@ -1712,6 +1733,9 @@ var $builtinmodule = function (name) {
                 new DrawLayerGroup(),  // Sprites
                 new DrawLayerGroup(),  // Text (one day)
             ];
+
+            this.stepping_thread = null;
+            this.threads_paused = false;
         }
 
         actor_by_class_name(cls_name) {
@@ -2122,8 +2146,149 @@ var $builtinmodule = function (name) {
         cull_unregistered_instances() {
             this.actors.forEach(a => a.cull_unregistered_instances());
         }
+
+        get_stepping_thread() {
+            return this.stepping_thread;
+        }
+
+        set_stepping_thread(thread) {
+            this.stepping_thread = thread;
+        }
+
+        has_stepping_thread() {
+            return this.stepping_thread !== null;
+        }
+
+        threads_are_paused() {
+            return this.threads_paused;
+        }
+
+        pause_threads(threads_paused) {
+            this.threads_paused = threads_paused;
+        }
+
+        get_debug_line() {
+            return get_line_from_susp(this.stepping_thread.skulpt_susp);
+
+            function get_line_from_susp(susp) {
+                if (susp.child && susp.child.$isSuspension) {
+                    return get_line_from_susp(susp.child);
+                }
+
+                return susp.$lineno;
+            }
+        }
+
+        has_top_level_debug_suspension() {
+            let debug_suspension = this.stepping_thread.skulpt_susp;
+            if (debug_suspension === null)
+                return false;
+            return !(debug_suspension.child && debug_suspension.child.$isSuspension);
+        }
+
+        continue_on_breakpoint() {
+            if (this.has_stepping_thread()) {
+                console.log(`Thread for ${this.stepping_thread.actor_instance.info_label} continuing after breakpoint`);
+                this.set_stepping_thread(null);
+                this.pause_threads(false);
+            }
+        }
+
+        get_all_local_variables = function() {
+            const actor_collection = {}
+            this.actors.forEach(actor => {
+                const class_variables = new ClassVariables(actor)
+                actor.instances.forEach(instance => {
+                    const vars = new ActorVariables(instance);
+                    class_variables.actors[instance.info_label] = vars;
+                });
+                actor_collection[actor.instances[0].class_name] = class_variables
+            });
+    
+            this.thread_groups.forEach(threadGroup => {
+                threadGroup.threads.forEach(thread => {
+                const suspension = thread.skulpt_susp;
+                if (suspension && suspension.$tmps) {
+                    const class_name = suspension.$tmps.self.$pytchActorInstance.class_name;
+                    const actor = suspension.$tmps.self.$pytchActorInstance.info_label;
+                    actor_collection[class_name].actors[actor].set_local_variables(suspension.$tmps);
+                }
+                });
+            });
+            return actor_collection;
+        };
+
+        get_global_variables() {
+            const globalVariables = {};
+            Object.entries(this.$containingModule.$d)
+                .filter(([key, value]) => !key.startsWith("_") && !key.startsWith("$") && typeof value !== "function" && !String(value).startsWith("<module"))
+                .forEach(([key, value]) => {
+                    globalVariables[key] = value;
+                });
+            return globalVariables;
+        }
     }
 
+    class ClassVariables {
+        constructor(actor) {
+            this.is_stage = actor instanceof PytchStage
+            let static_vars = Object.getPrototypeOf(actor.instances[0].py_object)
+            this.static = filterVariables(static_vars);
+            this.actors = {};
+        }
+
+        has_clones() {
+            return Object.keys(this.actors).length > 1;
+        }
+    }
+
+    class ActorVariables {
+        constructor(instance) {
+            this.position = {
+                x: instance.render_x,
+                y: instance.render_y,
+                toString() {
+                    if (this.x === null || this.y === null) {
+                        return "";
+                    }
+                    return `Position: (${parseFloat(this.x.toFixed(2))}, ${parseFloat(this.y.toFixed(2))})`;
+                }
+            };
+            this.costume_number = instance.render_appearance_index
+            this.img_src = instance.actor._appearances[this.costume_number].image.currentSrc;
+            this.local = {};
+        }
+
+        set_local_variables(variables) {
+            this.local = filterVariables(variables);
+        }
+
+        has_variables(variable_type) {
+            return Object.keys(this[variable_type]).length > 1 && 
+                Object.values(this[variable_type]).some(value => value !== undefined);
+        }
+
+        show_variables(variable_type) {
+            const variables = this[variable_type];
+            return Object.entries(variables)
+            .filter(([_, value]) => value !== undefined)
+            .map(([key, value]) => {
+                if (/^-?\d+\.\d+$/.test(value)) {
+                    value = parseFloat(value.toFixed(2));
+                }
+                return `${key}: ${value}`;
+            });
+        }
+    }
+
+    function filterVariables(variables) {
+        return Object.entries(variables)
+            .filter(([key, value]) => !key.startsWith("_") && !key.startsWith("$") && key !== "self" && !String(value).startsWith("<function"))
+            .reduce((acc, [key, value]) => {
+                acc[key] = value;
+                return acc;
+            }, {});
+    }
 
     ////////////////////////////////////////////////////////////////////////////////
     //

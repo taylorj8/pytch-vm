@@ -88,4 +88,6 @@ require("./constants.js");
 require("./pytchsupport.js");
 require("./tigerpython-parser.js");
 
+require("./debugger.js");
+
 /* jshint ignore:end */
