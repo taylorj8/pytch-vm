@@ -2239,7 +2239,7 @@ var $builtinmodule = function (name) {
             this.costumes = rawCostumes
                 ? rawCostumes.map(c => c.v[0].v)
                 : null;
-
+            this.sounds = static_vars["Sounds"];
             this.actors = {};
         }
 
@@ -2247,10 +2247,13 @@ var $builtinmodule = function (name) {
             return Object.keys(this.actors).length > 1;
         }
 
-        show_costumes() {
+        display_costumes() {
             const label = this.is_stage ? "Backdrops" : "Costumes";
-            if (!this.costumes) return `No ${label}`;
-            return `${label}: [${this.costumes.join(", ")}]`;
+            return this.costumes? `${label}: [${this.costumes.join(", ")}]` : "";
+        }
+
+        display_sounds() {
+            return this.sounds? `Sounds: [${this.sounds.join(", ")}]` : "";
         }
     }
 
@@ -2280,7 +2283,7 @@ var $builtinmodule = function (name) {
                 Object.values(this[variable_type]).some(value => value !== undefined);
         }
 
-        show_variables(variable_type) {
+        display_variables(variable_type) {
             const variables = this[variable_type];
             return Object.entries(variables)
             .filter(([_, value]) => value !== undefined)
@@ -2296,11 +2299,9 @@ var $builtinmodule = function (name) {
     function filterVariables(variables) {
         return Object.entries(variables)
             .filter(([key, value]) => 
-                key !== "Costumes" && 
-                key !== "Backdrops" &&
+                !key in ["Costumes", "Backdrops", "Sounds", "self"] &&
                 !key.startsWith("_") &&
                 !key.startsWith("$") &&
-                key !== "self" &&
                 !String(value).startsWith("<function"))
             .reduce((acc, [key, value]) => {
                 acc[key] = value;
