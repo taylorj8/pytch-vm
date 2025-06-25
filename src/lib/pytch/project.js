@@ -1312,7 +1312,7 @@ var $builtinmodule = function (name) {
         }
     }
 
-    Thread.State = {
+    Thread.State = { // todo check edge cases with each state
         // RUNNING: The thread will be given a chance to run until either
         // completion or its next Pytch syscall.
         RUNNING: "running",
@@ -2231,14 +2231,26 @@ var $builtinmodule = function (name) {
 
     class ClassVariables {
         constructor(actor) {
-            this.is_stage = actor instanceof PytchStage
-            let static_vars = Object.getPrototypeOf(actor.instances[0].py_object)
+            this.is_stage = actor instanceof PytchStage;
+            let static_vars = Object.getPrototypeOf(actor.instances[0].py_object);
             this.static = filterVariables(static_vars);
+
+            const rawCostumes = this.is_stage ? static_vars["Backdrops"].v : static_vars["Costumes"].v;
+            this.costumes = rawCostumes
+                ? rawCostumes.map(c => c.v[0].v)
+                : null;
+
             this.actors = {};
         }
 
         has_clones() {
             return Object.keys(this.actors).length > 1;
+        }
+
+        show_costumes() {
+            const label = this.is_stage ? "Backdrops" : "Costumes";
+            if (!this.costumes) return `No ${label}`;
+            return `${label}: [${this.costumes.join(", ")}]`;
         }
     }
 
@@ -2254,8 +2266,8 @@ var $builtinmodule = function (name) {
                     return `Position: (${parseFloat(this.x.toFixed(2))}, ${parseFloat(this.y.toFixed(2))})`;
                 }
             };
-            this.costume_number = instance.render_appearance_index
-            this.img_src = instance.actor._appearances[this.costume_number].image.currentSrc;
+            this.costume_index = instance.render_appearance_index
+            this.img_src = instance.actor._appearances[this.costume_index].image.currentSrc;
             this.local = {};
         }
 
@@ -2283,7 +2295,13 @@ var $builtinmodule = function (name) {
 
     function filterVariables(variables) {
         return Object.entries(variables)
-            .filter(([key, value]) => !key.startsWith("_") && !key.startsWith("$") && key !== "self" && !String(value).startsWith("<function"))
+            .filter(([key, value]) => 
+                key !== "Costumes" && 
+                key !== "Backdrops" &&
+                !key.startsWith("_") &&
+                !key.startsWith("$") &&
+                key !== "self" &&
+                !String(value).startsWith("<function"))
             .reduce((acc, [key, value]) => {
                 acc[key] = value;
                 return acc;

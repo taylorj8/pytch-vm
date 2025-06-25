@@ -6,6 +6,7 @@
 
 // var Sk = Sk || {}; //jshint ignore:line
 
+
 function hasOwnProperty(obj, prop) {
     var proto = obj.constructor.prototype;
     return (prop in obj) &&
@@ -86,7 +87,7 @@ Sk.Debugger.prototype.check_breakpoints = function(filename, lineno, colno, glob
     // at every line.
     if (this.step_mode === true) {
         // break only when in the stdin file
-        return filename === "<stdin>.py"
+        return filename === "<stdin>.py";
     }
     
     var key = this.generate_breakpoint_key(filename, lineno, colno);
