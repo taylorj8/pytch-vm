@@ -2286,10 +2286,14 @@ var $builtinmodule = function (name) {
 
         display_variables(variable_scope) {
             const variables = this[variable_scope];
+            // console.log(variables)
             return Object.entries(variables)
-                .filter(([_, value]) => value !== undefined)
+                .filter(([key, value]) => key !== "costume_index" && value !== undefined)
                 .map(([key, value]) => {
                     let val = value.v;
+                    if (value && typeof Sk !== "undefined" && value.constructor === Sk.builtin.bool) {
+                        val = (val === 1) ? true : false;
+                    }
                     return { key, val };
                 });
         }
