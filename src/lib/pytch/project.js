@@ -2267,7 +2267,7 @@ var $builtinmodule = function (name) {
                     if (this.x === null || this.y === null) {
                         return "";
                     }
-                    return `Position: (${parseFloat(this.x.toFixed(2))}, ${parseFloat(this.y.toFixed(2))})`;
+                    return `(${parseFloat(this.x.toFixed(2))}, ${parseFloat(this.y.toFixed(2))})`;
                 }
             };
             this.costume_index = instance.render_appearance_index
