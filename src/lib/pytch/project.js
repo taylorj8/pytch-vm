@@ -2289,13 +2289,16 @@ var $builtinmodule = function (name) {
                 .filter(([_, value]) => value !== undefined)
                 .map(([key, value]) => {
                     let val = value.v;
-                    let type = typeof val;
-                    if (type === "number") {
-                        if (!Number.isInteger(val)) {
+                    let type;
+                    if (Array.isArray(val)) {
+                        type = "array";
+                    } else {
+                        type = typeof val;
+                        if (type === "number" && !Number.isInteger(val)) {
                             val = parseFloat(val.toFixed(3));
                         }
                     }
-                    console.log(`${key}: ${val}`);
+                
                     return { key, val, type };
                 });
         }
