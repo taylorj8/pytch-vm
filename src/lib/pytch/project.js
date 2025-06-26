@@ -2278,28 +2278,34 @@ var $builtinmodule = function (name) {
             this.local = filterVariables(variables);
         }
 
-        has_variables(variable_type) {
-            return Object.keys(this[variable_type]).length > 1 && 
-                Object.values(this[variable_type]).some(value => value !== undefined);
+        has_variables(variable_scope) {
+            return Object.keys(this[variable_scope]).length > 1 && 
+                Object.values(this[variable_scope]).some(value => value !== undefined);
         }
 
-        display_variables(variable_type) {
-            const variables = this[variable_type];
+        display_variables(variable_scope) {
+            const variables = this[variable_scope];
             return Object.entries(variables)
-            .filter(([_, value]) => value !== undefined)
-            .map(([key, value]) => {
-                if (/^-?\d+\.\d+$/.test(value)) {
-                    value = parseFloat(value.toFixed(2));
-                }
-                return `${key}: ${value}`;
-            });
+                .filter(([_, value]) => value !== undefined)
+                .map(([key, value]) => {
+                    let val = value.v;
+                    let type = typeof val;
+                    if (type === "number") {
+                        if (!Number.isInteger(val)) {
+                            val = parseFloat(val.toFixed(3));
+                        }
+                    }
+                    console.log(`${key}: ${val}`);
+                    return { key, val, type };
+                });
         }
     }
 
     function filterVariables(variables) {
+        // console.log(variables)
         return Object.entries(variables)
             .filter(([key, value]) => 
-                !key in ["Costumes", "Backdrops", "Sounds", "self"] &&
+                !["self", "Costumes", "Backdrops", "Sounds"].includes(key) &&
                 !key.startsWith("_") &&
                 !key.startsWith("$") &&
                 !String(value).startsWith("<function"))
