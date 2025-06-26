@@ -2247,13 +2247,14 @@ var $builtinmodule = function (name) {
             return Object.keys(this.actors).length > 1;
         }
 
-        display_costumes() {
+        display_costumes_and_sounds() {
             const label = this.is_stage ? "Backdrops" : "Costumes";
-            return this.costumes? `${label}: [${this.costumes.join(", ")}]` : "";
-        }
-
-        display_sounds() {
-            return this.sounds? `Sounds: [${this.sounds.join(", ")}]` : "";
+            const costumes_and_sounds = [{ key: label, val: this.costumes }]
+            if (this.sounds.v.length > 0) {
+                costumes_and_sounds.push(this.sounds.v);
+            }
+            // console.log(this.costumes);
+            return costumes_and_sounds;
         }
     }
 
