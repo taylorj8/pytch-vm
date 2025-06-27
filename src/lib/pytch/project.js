@@ -2253,7 +2253,6 @@ var $builtinmodule = function (name) {
             if (this.sounds.v.length > 0) {
                 costumes_and_sounds.push(this.sounds.v);
             }
-            // console.log(this.costumes);
             return costumes_and_sounds;
         }
     }
@@ -2286,11 +2285,10 @@ var $builtinmodule = function (name) {
 
         display_variables(variable_scope) {
             const variables = this[variable_scope];
-            // console.log(variables)
             return Object.entries(variables)
                 .filter(([key, value]) => key !== "costume_index" && value !== undefined)
                 .map(([key, value]) => {
-                    let val = value.v;
+                    let val = ("v" in value) ? value.v : value.entries;
                     if (value && typeof Sk !== "undefined" && value.constructor === Sk.builtin.bool) {
                         val = (val === 1) ? true : false;
                     }
@@ -2300,7 +2298,6 @@ var $builtinmodule = function (name) {
     }
 
     function filterVariables(variables) {
-        // console.log(variables)
         return Object.entries(variables)
             .filter(([key, value]) => 
                 !["self", "Costumes", "Backdrops", "Sounds"].includes(key) &&
