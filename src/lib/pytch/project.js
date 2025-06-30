@@ -2255,6 +2255,18 @@ var $builtinmodule = function (name) {
             }
             return costumes_and_sounds;
         }
+
+        display_static_variables() {
+            return Object.entries(this.static)
+                .filter(([, value]) => value !== undefined)
+                .map(([key, value]) => {
+                    let val = ("v" in value) ? value.v : value.entries;
+                    if (value && typeof Sk !== "undefined" && value.constructor === Sk.builtin.bool) {
+                        val = (val === 1) ? true : false;
+                    }
+                    return { key, val };
+                });
+        }
     }
 
     class ActorVariables {
@@ -2278,14 +2290,13 @@ var $builtinmodule = function (name) {
             this.local = filterVariables(variables);
         }
 
-        has_variables(variable_scope) {
-            return Object.keys(this[variable_scope]).length > 1 && 
-                Object.values(this[variable_scope]).some(value => value !== undefined);
+        has_local_variables() {
+            return Object.keys(this.local).length > 1 && 
+                Object.values(this.local).some(value => value !== undefined);
         }
 
-        display_variables(variable_scope) {
-            const variables = this[variable_scope];
-            return Object.entries(variables)
+        display_local_variables() {
+            return Object.entries(this.local)
                 .filter(([key, value]) => key !== "costume_index" && value !== undefined)
                 .map(([key, value]) => {
                     let val = ("v" in value) ? value.v : value.entries;
