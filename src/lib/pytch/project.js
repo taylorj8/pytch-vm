@@ -2236,10 +2236,15 @@ var $builtinmodule = function (name) {
             this.static = filterVariables(static_vars);
 
             const rawCostumes = this.is_stage ? static_vars["Backdrops"].v : static_vars["Costumes"].v;
+            // costumes can be represented by a string or tuple
             this.costumes = rawCostumes
-                ? rawCostumes.map(c => c.v[0].v)
+                ? rawCostumes.map(c => (typeof c.v === "string" ? c.v : c.v[0].v))
                 : null;
-            this.sounds = static_vars["Sounds"];
+
+            const rawSounds = static_vars["Sounds"].v; 
+            this.sounds = rawSounds
+                ? rawSounds.map(s => s.v)
+                : null;
             this.actors = {};
         }
 
@@ -2250,10 +2255,15 @@ var $builtinmodule = function (name) {
         display_costumes_and_sounds() {
             const label = this.is_stage ? "Backdrops" : "Costumes";
             const costumes_and_sounds = [{ key: label, val: this.costumes }]
-            if (this.sounds.v.length > 0) {
-                costumes_and_sounds.push(this.sounds.v);
+            if (this.sounds.length > 0) {
+                costumes_and_sounds.push({ key: "Sounds", val: this.sounds});
             }
             return costumes_and_sounds;
+        }
+
+        has_static_variables() {
+            return Object.keys(this.static).length > 1 && 
+                Object.values(this.static).some(value => value !== undefined);
         }
 
         display_static_variables() {
