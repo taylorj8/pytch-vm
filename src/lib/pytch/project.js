@@ -2262,7 +2262,7 @@ var $builtinmodule = function (name) {
         }
 
         has_static_variables() {
-            return Object.keys(this.static).length > 1 && 
+            return Object.keys(this.static).length > 0 && 
                 Object.values(this.static).some(value => value !== undefined);
         }
 
@@ -2301,7 +2301,7 @@ var $builtinmodule = function (name) {
         }
 
         has_local_variables() {
-            return Object.keys(this.local).length > 1 && 
+            return Object.keys(this.local).length > 0 && 
                 Object.values(this.local).some(value => value !== undefined);
         }
 
