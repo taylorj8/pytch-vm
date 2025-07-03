@@ -2199,7 +2199,7 @@ var $builtinmodule = function (name) {
             this.actors.forEach(actor => {
                 const class_variables = new ClassVariables(actor)
                 actor.instances.forEach(instance => {
-                    const vars = new ActorVariables(instance);
+                    const vars = new InstanceVariables(instance);
                     class_variables.actors[instance.info_label] = vars;
                 });
                 actor_collection[actor.instances[0].class_name] = class_variables
@@ -2279,7 +2279,7 @@ var $builtinmodule = function (name) {
         }
     }
 
-    class ActorVariables {
+    class InstanceVariables {
         constructor(instance) {
             this.position = {
                 x: instance.render_x,
