@@ -169,7 +169,7 @@ var $builtinmodule = function (name) {
     // (In due course, 'at a particular angle of rotation' will be added here.)
 
     class RenderImage {
-        constructor(x, y, scale, rotation, image, image_cx, image_cy, image_label) {
+        constructor(x, y, scale, rotation, image, image_cx, image_cy, image_label, instance_id) {
             this.kind = "RenderImage";
             this.x = x;
             this.y = y;
@@ -179,6 +179,7 @@ var $builtinmodule = function (name) {
             this.image_cx = image_cx;
             this.image_cy = image_cy;
             this.image_label = image_label;
+            this.instance_id = instance_id;
         }
     }
 
@@ -823,7 +824,8 @@ var $builtinmodule = function (name) {
                                 appearance.image,
                                 appearance.centre_x,
                                 appearance.centre_y,
-                                appearance.label),
+                                appearance.label,
+                                this.numeric_id),
             ];
 
             // Don't really like this 'initialise then overwrite' approach but
