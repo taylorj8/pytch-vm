@@ -2199,7 +2199,7 @@ var $builtinmodule = function (name) {
             this.actors.forEach(actor => {
                 const class_variables = new ClassVariables(actor)
                 actor.instances.forEach(instance => {
-                    const vars = new ActorVariables(instance);
+                    const vars = new InstanceVariables(instance);
                     class_variables.actors[instance.info_label] = vars;
                 });
                 actor_collection[actor.instances[0].class_name] = class_variables
@@ -2236,10 +2236,15 @@ var $builtinmodule = function (name) {
             this.static = filterVariables(static_vars);
 
             const rawCostumes = this.is_stage ? static_vars["Backdrops"].v : static_vars["Costumes"].v;
+            // costumes can be represented by a string or tuple
             this.costumes = rawCostumes
-                ? rawCostumes.map(c => c.v[0].v)
+                ? rawCostumes.map(c => (typeof c.v === "string" ? c.v : c.v[0].v))
                 : null;
 
+            const rawSounds = static_vars["Sounds"].v; 
+            this.sounds = rawSounds
+                ? rawSounds.map(s => s.v)
+                : null;
             this.actors = {};
         }
 
@@ -2247,14 +2252,34 @@ var $builtinmodule = function (name) {
             return Object.keys(this.actors).length > 1;
         }
 
-        show_costumes() {
+        display_costumes_and_sounds() {
             const label = this.is_stage ? "Backdrops" : "Costumes";
-            if (!this.costumes) return `No ${label}`;
-            return `${label}: [${this.costumes.join(", ")}]`;
+            const costumes_and_sounds = [{ key: label, val: this.costumes }]
+            if (this.sounds.length > 0) {
+                costumes_and_sounds.push({ key: "Sounds", val: this.sounds});
+            }
+            return costumes_and_sounds;
+        }
+
+        has_static_variables() {
+            return Object.keys(this.static).length > 0 && 
+                Object.values(this.static).some(value => value !== undefined);
+        }
+
+        display_static_variables() {
+            return Object.entries(this.static)
+                .filter(([, value]) => value !== undefined)
+                .map(([key, value]) => {
+                    let val = ("v" in value) ? value.v : value.entries;
+                    if (value && typeof Sk !== "undefined" && value.constructor === Sk.builtin.bool) {
+                        val = (val === 1) ? true : false;
+                    }
+                    return { key, val };
+                });
         }
     }
 
-    class ActorVariables {
+    class InstanceVariables {
         constructor(instance) {
             this.position = {
                 x: instance.render_x,
@@ -2263,7 +2288,7 @@ var $builtinmodule = function (name) {
                     if (this.x === null || this.y === null) {
                         return "";
                     }
-                    return `Position: (${parseFloat(this.x.toFixed(2))}, ${parseFloat(this.y.toFixed(2))})`;
+                    return `(${parseFloat(this.x.toFixed(2))}, ${parseFloat(this.y.toFixed(2))})`;
                 }
             };
             this.costume_index = instance.render_appearance_index
@@ -2275,32 +2300,30 @@ var $builtinmodule = function (name) {
             this.local = filterVariables(variables);
         }
 
-        has_variables(variable_type) {
-            return Object.keys(this[variable_type]).length > 1 && 
-                Object.values(this[variable_type]).some(value => value !== undefined);
+        has_local_variables() {
+            return Object.keys(this.local).length > 0 && 
+                Object.values(this.local).some(value => value !== undefined);
         }
 
-        show_variables(variable_type) {
-            const variables = this[variable_type];
-            return Object.entries(variables)
-            .filter(([_, value]) => value !== undefined)
-            .map(([key, value]) => {
-                if (/^-?\d+\.\d+$/.test(value)) {
-                    value = parseFloat(value.toFixed(2));
-                }
-                return `${key}: ${value}`;
-            });
+        display_local_variables() {
+            return Object.entries(this.local)
+                .filter(([key, value]) => key !== "costume_index" && value !== undefined)
+                .map(([key, value]) => {
+                    let val = ("v" in value) ? value.v : value.entries;
+                    if (value && typeof Sk !== "undefined" && value.constructor === Sk.builtin.bool) {
+                        val = (val === 1) ? true : false;
+                    }
+                    return { key, val };
+                });
         }
     }
 
     function filterVariables(variables) {
         return Object.entries(variables)
             .filter(([key, value]) => 
-                key !== "Costumes" && 
-                key !== "Backdrops" &&
+                !["self", "Costumes", "Backdrops", "Sounds"].includes(key) &&
                 !key.startsWith("_") &&
                 !key.startsWith("$") &&
-                key !== "self" &&
                 !String(value).startsWith("<function"))
             .reduce((acc, [key, value]) => {
                 acc[key] = value;
