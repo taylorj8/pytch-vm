@@ -2196,7 +2196,7 @@ var $builtinmodule = function (name) {
             }
         }
 
-        get_all_local_variables = function() {
+        extract_local_variables = function() {
             const actor_collection = {}
             this.actors.forEach(actor => {
                 const class_variables = new ClassVariables(actor)
@@ -2220,7 +2220,7 @@ var $builtinmodule = function (name) {
             return actor_collection;
         };
 
-        get_global_variables() {
+        extract_global_variables() {
             const globalVariables = {};
             Object.entries(this.$containingModule.$d)
                 .filter(([key, value]) => !key.startsWith("_") && !key.startsWith("$") && typeof value !== "function" && !String(value).startsWith("<module"))
@@ -2293,8 +2293,16 @@ var $builtinmodule = function (name) {
                     return `(${parseFloat(this.x.toFixed(2))}, ${parseFloat(this.y.toFixed(2))})`;
                 }
             };
-            this.costume_index = instance.render_appearance_index
-            this.img_src = instance.actor._appearances[this.costume_index].image.currentSrc;
+
+            // instance.render_appearance_index throws an error whenever called on 
+            // instance with no costumes, so catch to handle this
+            try {
+                this.costume_index = instance.render_appearance_index;
+                this.img_src = instance.actor._appearances[this.costume_index].image.currentSrc;
+            } catch {
+                this.costume_index = -1;
+                this.img_src = null;
+            }
             this.local = {};
         }
 
