@@ -117,6 +117,10 @@ Sk.Debugger.prototype.get_breakpoints_list = function() {
     return this.dbg_breakpoints;
 };
 
+Sk.Debugger.prototype.get_breakpoint_lines = function () {
+    return Object.values(this.dbg_breakpoints).map(bp => bp.lineno);
+};
+
 Sk.Debugger.prototype.disable_breakpoint = function(filename, lineno, colno) {
     var key = this.generate_breakpoint_key(filename, lineno, colno);
     
