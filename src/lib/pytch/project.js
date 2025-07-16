@@ -2227,6 +2227,8 @@ var $builtinmodule = function (name) {
         constructor(actor) {
             this.is_stage = actor instanceof PytchStage;
             let static_vars = Object.getPrototypeOf(actor.instances[0].py_object);
+            if (static_vars.tp$name === "BunnyLeader")
+                console.log(actor)
             this.static = filterVariables(static_vars);
 
             const rawCostumes = this.is_stage ? static_vars["Backdrops"].v : static_vars["Costumes"].v;
@@ -2328,14 +2330,12 @@ var $builtinmodule = function (name) {
             const valueObj = Array.isArray(value) ? value[1] : value;
 
             let val;
-            let isReference = false;
             if ("v" in valueObj) {
                 val = valueObj.v;
             } else if ("entries" in valueObj) {
                 val = valueObj.entries;
             } else if ("$pytchActorInstance" in valueObj) {
-                val = valueObj.$pytchActorInstance.info_label;
-                isReference = true;
+                val = valueObj.$pytchActorInstance;
             } else {
                 val = valueObj;
             }
@@ -2343,7 +2343,7 @@ var $builtinmodule = function (name) {
             if (valueObj && typeof Sk !== "undefined" && valueObj.constructor === Sk.builtin.bool) {
                 val = (val === 1) ? true : false;
             }
-            return { key, val, isReference };
+            return { key, val };
         });
     }
 
