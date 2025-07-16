@@ -2299,7 +2299,7 @@ var $builtinmodule = function (name) {
         }
         
         has_local_variables() {
-            return this.local.length> 0;
+            return this.local.length > 0;
         }
 
         get_instance_variables() {
@@ -2327,11 +2327,23 @@ var $builtinmodule = function (name) {
         .map(([key, value]) => {
             const valueObj = Array.isArray(value) ? value[1] : value;
 
-            let val = ("v" in valueObj) ? valueObj.v : valueObj.entries;
+            let val;
+            let isReference = false;
+            if ("v" in valueObj) {
+                val = valueObj.v;
+            } else if ("entries" in valueObj) {
+                val = valueObj.entries;
+            } else if ("$pytchActorInstance" in valueObj) {
+                val = valueObj.$pytchActorInstance.info_label;
+                isReference = true;
+            } else {
+                val = valueObj;
+            }
+
             if (valueObj && typeof Sk !== "undefined" && valueObj.constructor === Sk.builtin.bool) {
                 val = (val === 1) ? true : false;
             }
-            return { key, val };
+            return { key, val, isReference };
         });
     }
 
