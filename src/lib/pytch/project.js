@@ -2181,22 +2181,14 @@ var $builtinmodule = function (name) {
             }
         }
 
-        has_top_level_debug_suspension() {
-            let debug_suspension = this.stepping_thread.skulpt_susp;
-            if (debug_suspension === null)
-                return false;
-            return !(debug_suspension.child && debug_suspension.child.$isSuspension);
-        }
-
         continue_on_breakpoint() {
             if (this.has_stepping_thread()) {
-                console.log(`Thread for ${this.stepping_thread.actor_instance.info_label} continuing after breakpoint`);
                 this.set_stepping_thread(null);
                 this.pause_threads(false);
             }
         }
 
-        extract_local_variables = function() {
+        extract_class_variables = function() {
             const actor_collection = {}
             this.actors.forEach(actor => {
                 const class_variables = new ClassVariables(actor)
@@ -2264,20 +2256,11 @@ var $builtinmodule = function (name) {
         }
 
         has_static_variables() {
-            return Object.keys(this.static).length > 0 && 
-                Object.values(this.static).some(value => value !== undefined);
+            return this.static.length > 0;
         }
 
-        display_static_variables() {
-            return Object.entries(this.static)
-                .filter(([, value]) => value !== undefined)
-                .map(([key, value]) => {
-                    let val = ("v" in value) ? value.v : value.entries;
-                    if (value && typeof Sk !== "undefined" && value.constructor === Sk.builtin.bool) {
-                        val = (val === 1) ? true : false;
-                    }
-                    return { key, val };
-                });
+        get_static_variables() {
+            return this.static;
         }
     }
 
@@ -2303,42 +2286,53 @@ var $builtinmodule = function (name) {
                 this.costume_index = -1;
                 this.img_src = null;
             }
-            this.local = {};
+            this.instance = filterVariables(instance.py_object.$d.entries);
+            this.local = [];
         }
 
         set_local_variables(variables) {
             this.local = filterVariables(variables);
         }
-
+        
+        get_local_variables() {
+            return this.local;
+        }
+        
         has_local_variables() {
-            return Object.keys(this.local).length > 0 && 
-                Object.values(this.local).some(value => value !== undefined);
+            return this.local.length> 0;
         }
 
-        display_local_variables() {
-            return Object.entries(this.local)
-                .filter(([key, value]) => key !== "costume_index" && value !== undefined)
-                .map(([key, value]) => {
-                    let val = ("v" in value) ? value.v : value.entries;
-                    if (value && typeof Sk !== "undefined" && value.constructor === Sk.builtin.bool) {
-                        val = (val === 1) ? true : false;
-                    }
-                    return { key, val };
-                });
+        get_instance_variables() {
+            return this.instance;
+        }
+
+        has_instance_variables() {
+            return this.instance.length > 0;
         }
     }
 
     function filterVariables(variables) {
-        return Object.entries(variables)
-            .filter(([key, value]) => 
-                !["self", "Costumes", "Backdrops", "Sounds"].includes(key) &&
-                !key.startsWith("_") &&
-                !key.startsWith("$") &&
-                !String(value).startsWith("<function"))
-            .reduce((acc, [key, value]) => {
-                acc[key] = value;
-                return acc;
-            }, {});
+      const excludedKeys = new Set([
+        "self", "Costumes", "Backdrops", "Sounds", "costume_index"
+      ]);
+
+      return Object.entries(variables)
+        .filter(([key, value]) => {
+          if (excludedKeys.has(key)) return false;
+          if (key.startsWith("_") || key.startsWith("$") || key.startsWith("!")) return false;
+          if (value === undefined) return false;
+          if (String(value).startsWith("<function")) return false;
+          return true;
+        })
+        .map(([key, value]) => {
+            const valueObj = Array.isArray(value) ? value[1] : value;
+
+            let val = ("v" in valueObj) ? valueObj.v : valueObj.entries;
+            if (valueObj && typeof Sk !== "undefined" && valueObj.constructor === Sk.builtin.bool) {
+                val = (val === 1) ? true : false;
+            }
+            return { key, val };
+        });
     }
 
     ////////////////////////////////////////////////////////////////////////////////
