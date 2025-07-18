@@ -1228,24 +1228,38 @@ var $builtinmodule = function (name) {
                     // if a susp is debug on a non-stepping thread or delay - resume and check it again
                     // if it is debug on a the stepping thread - pause threads and return
                     while (susp.data.type === "Sk.debug" || susp.data.type === "Sk.delay") {
+                        if (susp.data.type === "Sk.debug") console.log("DEBUG: " + this.callable_name)
+                        if (susp.data.type === "Sk.delay") console.log("DELAY: " + this.callable_name)
                         if (susp.data.type === "Sk.debug" && this.listening_for_debug_suspensions()) {
-                            this.parent_project.set_stepping_thread(this);
                             this.parent_project.pause_threads(true);
                             this.skulpt_susp = susp;
+                            // if stepping, return early
+                            // otherwise (i.e. on continue) run to the next Pytch susp
+                            if (!this.parent_project.has_stepping_thread()) {
+                                this.parent_project.set_stepping_thread(this);
+                            } else {
+                                return [];
+                            }
+                        }
+                        susp_or_retval = susp.resume();
+                        if (!susp_or_retval.$isSuspension) {
+                            this.state = Thread.State.ZOMBIE;
+                            this.skulpt_susp = null;
                             return [];
                         }
-                        susp = susp.resume();
+                        susp = susp_or_retval;
                     }
-
+                        
                     // Python-land code invoked a syscall.
                     if (susp.data.type !== "Pytch") {
                         const err = new Error("cannot handle non-Pytch suspension"
-                                              + ` of type "${susp.data.type}"`);
+                            + ` of type "${susp.data.type}"`);
                         Sk.pytch.on_exception(err, this.one_frame_error_context());
                         this.state = Thread.State.RAISED_EXCEPTION;
                         this.skulpt_susp = null;
                         return [];
                     }
+                    console.log("PYTCH: " + this.callable_name)
 
                     let syscall_args = susp.data.subtype_data;
 
