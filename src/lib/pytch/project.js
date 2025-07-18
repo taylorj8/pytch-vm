@@ -1224,22 +1224,19 @@ var $builtinmodule = function (name) {
                 } else {
                     // Python-land code returned a suspension
                     let susp = susp_or_retval;
-
-                    // skip delay suspensions
-                    if (susp.data.type === "Sk.delay") {
-                        this.skulpt_susp = susp;
-                        return [];
-                    }
                     
-                    if (susp.data.type === "Sk.debug") {
-                        if (this.listening_for_debug_suspensions()) {
+                    // if a susp is debug on a non-stepping thread or delay - resume and check it again
+                    // if it is debug on a the stepping thread - pause threads and return
+                    while (susp.data.type === "Sk.debug" || susp.data.type === "Sk.delay") {
+                        if (susp.data.type === "Sk.debug" && this.listening_for_debug_suspensions()) {
                             this.parent_project.set_stepping_thread(this);
                             this.parent_project.pause_threads(true);
+                            this.skulpt_susp = susp;
+                            return [];
                         }
-                        this.skulpt_susp = susp;
-                        return [];
+                        susp = susp.resume();
                     }
-                    
+
                     // Python-land code invoked a syscall.
                     if (susp.data.type !== "Pytch") {
                         const err = new Error("cannot handle non-Pytch suspension"
@@ -1905,6 +1902,13 @@ var $builtinmodule = function (name) {
         }
 
         one_frame() {
+            if (this.threads_are_paused()) {
+                return {
+                    exception_was_raised: false,
+                    maybe_live_question: this.maybe_live_question(),
+                };
+            }
+
             this.launch_keypress_handlers();
             this.launch_mouse_click_handlers();
 
@@ -2185,6 +2189,22 @@ var $builtinmodule = function (name) {
             if (this.has_stepping_thread()) {
                 this.set_stepping_thread(null);
                 this.pause_threads(false);
+            }
+        }
+
+        step_debug_thread() {
+            if (!this.has_stepping_thread()) {
+                return;
+            }
+
+            const thread = this.get_stepping_thread();
+            this.pause_threads(false);
+            const new_thread_groups = thread.one_frame();
+            this.thread_groups.push(...new_thread_groups);
+
+            // if the thread finishes during its step, exit step mode
+            if (thread.is_zombie()) {
+                this.continue_on_breakpoint();
             }
         }
 
