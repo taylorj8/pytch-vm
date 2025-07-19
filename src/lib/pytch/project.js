@@ -967,7 +967,6 @@ var $builtinmodule = function (name) {
             this.callable_name = js_getattr(py_callable, Sk.builtin.str.$name);
 
             this.loop_iteration_batching_states = [new LoopIterationBatchingState(1)];
-            this.debug_susp = null;
         }
 
         is_running() {
@@ -1229,20 +1228,13 @@ var $builtinmodule = function (name) {
                     // if a susp is debug on a non-stepping thread or delay - resume and check it again
                     // if it is debug on a the stepping thread - pause threads and return
                     while (susp.data.type === "Sk.debug" || susp.data.type === "Sk.delay") {
-                        if (susp.data.type === "Sk.debug") console.log("DEBUG: " + this.actor_instance.class_name)
-                        if (susp.data.type === "Sk.delay") console.log("DELAY: " + this.actor_instance.class_name)
-                        
                         if (susp.data.type === "Sk.debug" && this.listening_for_debug_suspensions()) {
                             this.parent_project.pause_threads(true);
                             this.skulpt_susp = susp;
                             this.parent_project.set_stepping_thread(this);
-                            this.parent_project.debug_susp = susp;
-                            // if stepping, return early
-                            // otherwise (i.e. on continue) run to the next Pytch susp
                             return [];
                         }
                         susp_or_retval = susp.resume();
-                        // console.log(susp_or_retval)
                         if (!susp_or_retval.$isSuspension) {
                             this.state = Thread.State.ZOMBIE;
                             this.skulpt_susp = null;
@@ -1260,7 +1252,6 @@ var $builtinmodule = function (name) {
                         this.skulpt_susp = null;
                         return [];
                     }
-                    console.log("PYTCH: " + this.actor_instance.class_name)
 
                     let syscall_args = susp.data.subtype_data;
 
@@ -1748,9 +1739,10 @@ var $builtinmodule = function (name) {
                 new DrawLayerGroup(),  // Text (one day)
             ];
 
+            // debugger
             this.stepping_thread = null;
             this.threads_paused = false;
-            this.debug_susp = null;
+            this.stepping_thread_zombified = false;
         }
 
         actor_by_class_name(cls_name) {
@@ -2190,7 +2182,7 @@ var $builtinmodule = function (name) {
         }
 
         get_debug_line() {
-            return get_line_from_susp(this.debug_susp);
+            return get_line_from_susp(this.stepping_thread.skulpt_susp);
 
             function get_line_from_susp(susp) {
                 if (susp.child && susp.child.$isSuspension) {
@@ -2199,6 +2191,10 @@ var $builtinmodule = function (name) {
 
                 return susp.$lineno;
             }
+        }
+
+        set_stepping_thread_zombified(zombified) {
+            this.stepping_thread_zombified = zombified;
         }
 
         continue_on_breakpoint() {
@@ -2212,6 +2208,10 @@ var $builtinmodule = function (name) {
 
             const new_thread_groups = thread.one_frame();
             this.thread_groups.push(...new_thread_groups);
+
+            if (thread.is_zombie()) {
+                this.set_stepping_thread_zombified(true);
+            }
         }
 
         step_debug_thread() {
@@ -2228,6 +2228,7 @@ var $builtinmodule = function (name) {
             if (thread.is_zombie()) {
                 this.set_stepping_thread(null);
                 this.pause_threads(false);
+                this.set_stepping_thread_zombified(true);
             }
         }
 
