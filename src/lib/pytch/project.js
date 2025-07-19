@@ -1235,14 +1235,11 @@ var $builtinmodule = function (name) {
                         if (susp.data.type === "Sk.debug" && this.listening_for_debug_suspensions()) {
                             this.parent_project.pause_threads(true);
                             this.skulpt_susp = susp;
-                            this.debug_susp = susp;
                             this.parent_project.set_stepping_thread(this);
+                            this.parent_project.debug_susp = susp;
                             // if stepping, return early
                             // otherwise (i.e. on continue) run to the next Pytch susp
-                            // console.log("stepping: " + this.parent_project.stepping)
-                            if (this.parent_project.stepping) {
-                                return [];
-                            }
+                            return [];
                         }
                         susp_or_retval = susp.resume();
                         // console.log(susp_or_retval)
@@ -1753,7 +1750,7 @@ var $builtinmodule = function (name) {
 
             this.stepping_thread = null;
             this.threads_paused = false;
-            this.stepping = false;
+            this.debug_susp = null;
         }
 
         actor_by_class_name(cls_name) {
@@ -2193,7 +2190,7 @@ var $builtinmodule = function (name) {
         }
 
         get_debug_line() {
-            return get_line_from_susp(this.stepping_thread.debug_susp);
+            return get_line_from_susp(this.debug_susp);
 
             function get_line_from_susp(susp) {
                 if (susp.child && susp.child.$isSuspension) {
@@ -2205,18 +2202,22 @@ var $builtinmodule = function (name) {
         }
 
         continue_on_breakpoint() {
-            if (this.has_stepping_thread()) {
-                this.set_stepping_thread(null);
-                this.pause_threads(false);
-                this.stepping = false;
+            if (!this.has_stepping_thread()) {
+                return;
             }
+
+            const thread = this.get_stepping_thread();
+            this.set_stepping_thread(null);
+            this.pause_threads(false);
+
+            const new_thread_groups = thread.one_frame();
+            this.thread_groups.push(...new_thread_groups);
         }
 
         step_debug_thread() {
             if (!this.has_stepping_thread()) {
                 return;
             }
-            this.stepping = true;
 
             const thread = this.get_stepping_thread();
             this.pause_threads(false);
@@ -2225,7 +2226,8 @@ var $builtinmodule = function (name) {
 
             // if the thread finishes during its step, exit step mode
             if (thread.is_zombie()) {
-                this.continue_on_breakpoint();
+                this.set_stepping_thread(null);
+                this.pause_threads(false);
             }
         }
 
