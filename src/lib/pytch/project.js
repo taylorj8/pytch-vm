@@ -1226,7 +1226,7 @@ var $builtinmodule = function (name) {
                     let susp = susp_or_retval;
                     
                     // if a susp is debug on a non-stepping thread or delay - resume and check it again
-                    // if it is debug on a the stepping thread - pause threads and return
+                    // if it is debug on the stepping thread - pause threads and return
                     while (susp.data.type === "Sk.debug" || susp.data.type === "Sk.delay") {
                         if (susp.data.type === "Sk.debug" && this.listening_for_debug_suspensions()) {
                             this.parent_project.pause_threads(true);
@@ -1369,6 +1369,7 @@ var $builtinmodule = function (name) {
         constructor(label) {
             this.label = label;
             this.threads = [];
+            this.unexecuted_threads = [];
         }
 
         create_thread(py_callable, py_arg, parent_project) {
@@ -1396,18 +1397,44 @@ var $builtinmodule = function (name) {
         }
 
         one_frame() {
-            let new_thread_groups = map_concat(t => t.one_frame(), this.threads);
+            const all_new_thread_groups = [];
 
-            this.threads = this.threads.filter(t => (! t.is_zombie()));
+            // if there are unexecuted threads, execute them 
+            const ts = this.has_unexecuted_threads() ? 
+                this.unexecuted_threads : this.threads;
 
-            if (this.has_live_threads())
-                new_thread_groups.push(this);
+            let breakpoint_hit = false;
+            for (let i = 0; i < ts.length; i++) {
+                const new_thread_groups = ts[i].one_frame();
+                all_new_thread_groups.push(...new_thread_groups);
 
-            return new_thread_groups;
+                // A breakpoint was hit. Remaining threads are unexecuted
+                if (ts[i].parent_project.threads_are_paused()) {
+                    this.unexecuted_threads = ts.slice(i);
+                    breakpoint_hit = true;
+                    break;
+                }
+            }
+            
+            this.threads = this.threads.filter(t => !t.is_zombie());
+            
+            if (this.has_live_threads() && !this.has_unexecuted_threads()) {
+                console.log(this.label)
+                all_new_thread_groups.push(this);
+            }
+
+            if (!breakpoint_hit) this.unexecuted_threads = [];
+            console.log("ALL NEW")
+            console.log(all_new_thread_groups)
+            return all_new_thread_groups;
         }
 
         threads_info() {
             return this.threads.map(t => t.info());
+        }
+
+        has_unexecuted_threads() {
+            return this.unexecuted_threads.length > 0;
         }
     }
 
@@ -1743,6 +1770,7 @@ var $builtinmodule = function (name) {
             this.stepping_thread = null;
             this.threads_paused = false;
             this.stepping_thread_zombified = false;
+            this.unexecuted_thread_groups = [];
         }
 
         actor_by_class_name(cls_name) {
@@ -1903,13 +1931,15 @@ var $builtinmodule = function (name) {
 
         launch_mouse_click_handlers() {
             let new_clicks = Sk.pytch.mouse.drain_new_click_events();
-
+            
             new_clicks.forEach(click => {
                 this.launch_click_handlers(click.stage_x, click.stage_y);
             });
         }
-
+        
         one_frame() {
+            console.log("unexecuted: " + this.has_unexecuted_thread_groups())
+
             this.launch_keypress_handlers();
             this.launch_mouse_click_handlers();
             
@@ -1922,11 +1952,40 @@ var $builtinmodule = function (name) {
                     maybe_live_question: this.maybe_live_question(),
                 };
             }
+            
+            //? two scenarios - frame completed: next one_frame will run for this.thread_groups
+            //?               - breakpoint hit: next one_frame needs to run for this.unexecuted_thread_groups
 
-            let new_thread_groups = map_concat(tg => tg.one_frame(),
-                                               this.thread_groups);
+            const tgs = this.has_unexecuted_thread_groups() ?
+                this.unexecuted_thread_groups : this.thread_groups;
+            
+            const all_new_thread_groups = [];
+            let breakpoint_hit = false;
+            for (let i = 0; i < tgs.length; i++) {
+                const new_thread_groups = tgs[i].one_frame();
+                all_new_thread_groups.push(...new_thread_groups);
+                
+                // breakpoint hit, stop processing any further thread groups for this frame
+                // get remaining thread groups for next frame
+                if (this.threads_are_paused()) {
+                    this.unexecuted_thread_groups = tgs.slice(i);
+                    breakpoint_hit = true;
+                    break;
+                }
+            }
 
-            this.thread_groups = new_thread_groups;
+
+            this.thread_groups = this.has_unexecuted_thread_groups()
+                ? this.thread_groups.concat(all_new_thread_groups)
+                : all_new_thread_groups;
+            // this.thread_groups = all_new_thread_groups    
+
+            if (!breakpoint_hit) this.unexecuted_thread_groups = [];
+            console.log("===================")
+            console.log(this.thread_groups)
+            console.log("===================")
+            console.log(this.unexecuted_thread_groups)
+            console.log("===================")
 
             const exception_was_raised
                   = this.thread_groups.some(tg => tg.raised_exception());
@@ -2181,6 +2240,10 @@ var $builtinmodule = function (name) {
             this.threads_paused = threads_paused;
         }
 
+        has_unexecuted_thread_groups() {
+            return this.unexecuted_thread_groups.length > 0;
+        }
+
         get_debug_line() {
             return get_line_from_susp(this.stepping_thread.skulpt_susp);
 
@@ -2202,12 +2265,14 @@ var $builtinmodule = function (name) {
                 return;
             }
 
+            
             const thread = this.get_stepping_thread();
             this.set_stepping_thread(null);
             this.pause_threads(false);
-
-            const new_thread_groups = thread.one_frame();
-            this.thread_groups.push(...new_thread_groups);
+            
+            this.one_frame();
+            // const new_thread_groups = thread.one_frame();
+            // this.thread_groups.push(...new_thread_groups);
 
             if (thread.is_zombie()) {
                 this.set_stepping_thread_zombified(true);
@@ -2219,12 +2284,15 @@ var $builtinmodule = function (name) {
                 return;
             }
 
-            const thread = this.get_stepping_thread();
             this.pause_threads(false);
-            const new_thread_groups = thread.one_frame();
-            this.thread_groups.push(...new_thread_groups);
+            this.one_frame()
 
-            // if the thread finishes during its step, exit step mode
+            const thread = this.get_stepping_thread();
+            // this.pause_threads(false);
+            // const new_thread_groups = thread.one_frame();
+            // this.thread_groups.push(...new_thread_groups);
+
+            // // if the thread finishes during its step, exit step mode
             if (thread.is_zombie()) {
                 this.set_stepping_thread(null);
                 this.pause_threads(false);
@@ -2232,6 +2300,7 @@ var $builtinmodule = function (name) {
             }
         }
 
+        // todo (debugger) check out ffi functions
         extract_class_variables = function() {
             const actor_collection = {}
             this.actors.forEach(actor => {
