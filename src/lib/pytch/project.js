@@ -1770,7 +1770,7 @@ var $builtinmodule = function (name) {
             this.stepping_thread = null;
             this.threads_paused = false;
             this.stepping_thread_zombified = false;
-            this.unexecuted_thread_groups = [];
+            this.next_thread_groups = [];
         }
 
         actor_by_class_name(cls_name) {
@@ -1938,7 +1938,10 @@ var $builtinmodule = function (name) {
         }
         
         one_frame() {
-            console.log("unexecuted: " + this.has_unexecuted_thread_groups())
+            if (this.thread_groups.length === 0) {
+                this.thread_groups = this.next_thread_groups;
+                this.next_thread_groups = [];
+            }
 
             this.launch_keypress_handlers();
             this.launch_mouse_click_handlers();
@@ -1953,38 +1956,27 @@ var $builtinmodule = function (name) {
                 };
             }
             
-            //? two scenarios - frame completed: next one_frame will run for this.thread_groups
-            //?               - breakpoint hit: next one_frame needs to run for this.unexecuted_thread_groups
-
-            const tgs = this.has_unexecuted_thread_groups() ?
-                this.unexecuted_thread_groups : this.thread_groups;
             
             const all_new_thread_groups = [];
-            let breakpoint_hit = false;
-            for (let i = 0; i < tgs.length; i++) {
-                const new_thread_groups = tgs[i].one_frame();
+            while (this.thread_groups.length > 0) {
+                const current_thread_group = this.thread_groups.shift();
+                const new_thread_groups = current_thread_group.one_frame();
                 all_new_thread_groups.push(...new_thread_groups);
-                
-                // breakpoint hit, stop processing any further thread groups for this frame
-                // get remaining thread groups for next frame
+                console.log("!!!!!!!!")
+                console.log(all_new_thread_groups)
+
+
                 if (this.threads_are_paused()) {
-                    this.unexecuted_thread_groups = tgs.slice(i);
-                    breakpoint_hit = true;
                     break;
                 }
             }
 
+            this.next_thread_groups.push(...all_new_thread_groups)
 
-            this.thread_groups = this.has_unexecuted_thread_groups()
-                ? this.thread_groups.concat(all_new_thread_groups)
-                : all_new_thread_groups;
-            // this.thread_groups = all_new_thread_groups    
-
-            if (!breakpoint_hit) this.unexecuted_thread_groups = [];
             console.log("===================")
             console.log(this.thread_groups)
             console.log("===================")
-            console.log(this.unexecuted_thread_groups)
+            console.log(this.next_thread_groups)
             console.log("===================")
 
             const exception_was_raised
