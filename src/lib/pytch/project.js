@@ -1365,7 +1365,7 @@ var $builtinmodule = function (name) {
     // response to the same event, such as green-flag or a message
     // being broadcast.
 
-    class ThreadGroup {
+    class   ThreadGroup {
         constructor(label) {
             this.label = label;
             this.threads = [];
@@ -1396,11 +1396,17 @@ var $builtinmodule = function (name) {
             this.threads.forEach(t => t.maybe_cull());
         }
 
+        reset_threads() {
+            this.threads = [];
+            this.unexecuted_threads = [];
+        }
+
         one_frame() {
             const all_new_thread_groups = [];
 
             // if there are unexecuted threads, execute them 
-            const ts = this.has_unexecuted_threads() ? 
+            const mid_frame = this.has_unexecuted_threads()
+            const ts = mid_frame? 
                 this.unexecuted_threads : this.threads;
 
             let breakpoint_hit = false;
@@ -1418,14 +1424,11 @@ var $builtinmodule = function (name) {
             
             this.threads = this.threads.filter(t => !t.is_zombie());
             
-            if (this.has_live_threads() && !this.has_unexecuted_threads()) {
-                console.log(this.label)
+            if (this.has_live_threads() && !mid_frame) {
                 all_new_thread_groups.push(this);
             }
 
             if (!breakpoint_hit) this.unexecuted_threads = [];
-            console.log("ALL NEW")
-            console.log(all_new_thread_groups)
             return all_new_thread_groups;
         }
 
@@ -1770,7 +1773,7 @@ var $builtinmodule = function (name) {
             this.stepping_thread = null;
             this.threads_paused = false;
             this.stepping_thread_zombified = false;
-            this.next_thread_groups = [];
+            this.next_frame_thread_groups = [];
         }
 
         actor_by_class_name(cls_name) {
@@ -1939,8 +1942,8 @@ var $builtinmodule = function (name) {
         
         one_frame() {
             if (this.thread_groups.length === 0) {
-                this.thread_groups = this.next_thread_groups;
-                this.next_thread_groups = [];
+                this.thread_groups = this.next_frame_thread_groups;
+                this.next_frame_thread_groups = [];
             }
 
             this.launch_keypress_handlers();
@@ -1956,14 +1959,15 @@ var $builtinmodule = function (name) {
                 };
             }
             
-            
             const all_new_thread_groups = [];
             while (this.thread_groups.length > 0) {
-                const current_thread_group = this.thread_groups.shift();
+                const current_thread_group = this.thread_groups[0];
                 const new_thread_groups = current_thread_group.one_frame();
                 all_new_thread_groups.push(...new_thread_groups);
-                console.log("!!!!!!!!")
-                console.log(all_new_thread_groups)
+
+                if (!current_thread_group.has_unexecuted_threads()) {
+                    this.thread_groups.shift();
+                }
 
 
                 if (this.threads_are_paused()) {
@@ -1971,13 +1975,7 @@ var $builtinmodule = function (name) {
                 }
             }
 
-            this.next_thread_groups.push(...all_new_thread_groups)
-
-            console.log("===================")
-            console.log(this.thread_groups)
-            console.log("===================")
-            console.log(this.next_thread_groups)
-            console.log("===================")
+            this.next_frame_thread_groups.push(...all_new_thread_groups)
 
             const exception_was_raised
                   = this.thread_groups.some(tg => tg.raised_exception());
@@ -2010,9 +2008,17 @@ var $builtinmodule = function (name) {
             return project_state;
         }
 
+        kill_thread_groups() {
+            this.thread_groups.forEach(tg => tg.reset_threads())
+            this.next_frame_thread_groups.forEach(tg => tg.reset_threads())
+            console.log(this.thread_groups)
+            this.thread_groups = [];
+            this.next_frame_thread_groups = [];
+        }
+        
         kill_all_threads_and_extras() {
             this.object_attribute_watchers = [];
-            this.thread_groups = [];
+            this.kill_thread_groups();
             this.unanswered_questions = [];
             Sk.pytch.sound_manager.stop_all_performances();
         }
@@ -2257,7 +2263,6 @@ var $builtinmodule = function (name) {
                 return;
             }
 
-            
             const thread = this.get_stepping_thread();
             this.set_stepping_thread(null);
             this.pause_threads(false);
