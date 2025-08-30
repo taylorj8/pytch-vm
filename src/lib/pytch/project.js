@@ -2007,24 +2007,24 @@ var $builtinmodule = function (name) {
 
             return project_state;
         }
-
-        kill_thread_groups() {
-            this.thread_groups.forEach(tg => tg.reset_threads())
-            this.next_frame_thread_groups.forEach(tg => tg.reset_threads())
-            console.log(this.thread_groups)
-            this.thread_groups = [];
-            this.next_frame_thread_groups = [];
-        }
         
         kill_all_threads_and_extras() {
             this.object_attribute_watchers = [];
-            this.kill_thread_groups();
+            this.thread_groups = [];
+            this.next_frame_thread_groups = [];
             this.unanswered_questions = [];
             Sk.pytch.sound_manager.stop_all_performances();
         }
 
+        reset_debug_state() {
+            this.pause_threads(false);
+            this.set_stepping_thread(null);
+            this.set_stepping_thread_zombified(false);
+        }
+
         on_red_stop_clicked() {
             this.kill_all_threads_and_extras();
+            this.reset_debug_state();
             this.actors.forEach(a => a.delete_all_clones());
 
             // Now there is only the original instance to deal with:
